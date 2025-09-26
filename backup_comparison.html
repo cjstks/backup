@@ -1,0 +1,443 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>전체 백업 vs 증분 백업 비교</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #2c3e50;
+            font-size: 2.5em;
+            margin-bottom: 30px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+        
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 30px 0;
+            border-radius: 15px;
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+        
+        .comparison-table th {
+            background: linear-gradient(135deg, #3498db, #2980b9);
+            color: white;
+            padding: 20px;
+            text-align: center;
+            font-weight: bold;
+            font-size: 1.1em;
+        }
+        
+        .comparison-table td {
+            padding: 15px;
+            text-align: center;
+            border-bottom: 1px solid #eee;
+            transition: background-color 0.3s ease;
+        }
+        
+        .comparison-table tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        
+        .comparison-table tr:hover {
+            background-color: #e8f4f8;
+            transform: scale(1.01);
+        }
+        
+        .full-backup {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+            font-weight: bold;
+        }
+        
+        .incremental-backup {
+            background: linear-gradient(135deg, #27ae60, #229954);
+            color: white;
+            font-weight: bold;
+        }
+        
+        .chart-section {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 40px 0;
+        }
+        
+        .chart-container {
+            background: white;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .chart-title {
+            text-align: center;
+            font-size: 1.3em;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .example-section {
+            margin: 40px 0;
+            padding: 25px;
+            background: linear-gradient(135deg, #f8f9fa, #e9ecef);
+            border-radius: 15px;
+            border-left: 5px solid #3498db;
+        }
+        
+        .example-title {
+            font-size: 1.5em;
+            color: #2c3e50;
+            margin-bottom: 20px;
+            font-weight: bold;
+        }
+        
+        .backup-timeline {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin: 20px 0;
+            padding: 20px;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .timeline-day {
+            text-align: center;
+            padding: 15px;
+            border-radius: 10px;
+            min-width: 80px;
+        }
+        
+        .full-day {
+            background: linear-gradient(135deg, #e74c3c, #c0392b);
+            color: white;
+        }
+        
+        .incremental-day {
+            background: linear-gradient(135deg, #27ae60, #229954);
+            color: white;
+        }
+        
+        .pros-cons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin: 30px 0;
+        }
+        
+        .pros, .cons {
+            padding: 20px;
+            border-radius: 15px;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.1);
+        }
+        
+        .pros {
+            background: linear-gradient(135deg, #d5f4e6, #c8e6c9);
+            border-left: 5px solid #27ae60;
+        }
+        
+        .cons {
+            background: linear-gradient(135deg, #ffeaa7, #fdcb6e);
+            border-left: 5px solid #f39c12;
+        }
+        
+        .pros h3, .cons h3 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        
+        ul {
+            list-style-type: none;
+            padding: 0;
+        }
+        
+        li {
+            padding: 8px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        li:before {
+            content: "✓";
+            color: #27ae60;
+            position: absolute;
+            left: 0;
+        }
+        
+        .cons li:before {
+            content: "⚠";
+            color: #f39c12;
+        }
+
+        @media (max-width: 768px) {
+            .chart-section, .pros-cons {
+                grid-template-columns: 1fr;
+            }
+            
+            .backup-timeline {
+                flex-direction: column;
+                gap: 10px;
+            }
+            
+            .timeline-day {
+                min-width: 200px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📦 전체 백업 vs 증분 백업 비교</h1>
+        
+        <!-- 비교 표 -->
+        <table class="comparison-table">
+            <thead>
+                <tr>
+                    <th>구분</th>
+                    <th class="full-backup">전체 백업 (Full Backup)</th>
+                    <th class="incremental-backup">증분 백업 (Incremental Backup)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td><strong>백업 내용</strong></td>
+                    <td>전체 데이터를 매번 백업</td>
+                    <td>변경된 부분만 백업</td>
+                </tr>
+                <tr>
+                    <td><strong>소요 시간</strong></td>
+                    <td>매번 오래 걸림</td>
+                    <td>짧은 시간 소요</td>
+                </tr>
+                <tr>
+                    <td><strong>저장 공간</strong></td>
+                    <td>많은 공간 필요</td>
+                    <td>적은 공간 사용</td>
+                </tr>
+                <tr>
+                    <td><strong>복구 속도</strong></td>
+                    <td>빠른 복구</td>
+                    <td>여러 백업 조합 필요</td>
+                </tr>
+                <tr>
+                    <td><strong>관리 복잡도</strong></td>
+                    <td>간단함</td>
+                    <td>복잡함</td>
+                </tr>
+                <tr>
+                    <td><strong>네트워크 부하</strong></td>
+                    <td>높음</td>
+                    <td>낮음</td>
+                </tr>
+                <tr>
+                    <td><strong>비용</strong></td>
+                    <td>높음</td>
+                    <td>낮음</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- 차트 섹션 -->
+        <div class="chart-section">
+            <div class="chart-container">
+                <div class="chart-title">📊 백업 용량 비교 (7일간)</div>
+                <canvas id="storageChart" width="400" height="300"></canvas>
+            </div>
+            <div class="chart-container">
+                <div class="chart-title">⏱️ 백업 시간 비교</div>
+                <canvas id="timeChart" width="400" height="300"></canvas>
+            </div>
+        </div>
+
+        <!-- 실제 예시 -->
+        <div class="example-section">
+            <div class="example-title">📋 실제 백업 시나리오 예시</div>
+            <p><strong>상황:</strong> 100GB 데이터베이스, 매일 5GB씩 변경</p>
+            
+            <div class="backup-timeline">
+                <div class="timeline-day full-day">
+                    <div><strong>월요일</strong></div>
+                    <div>전체: 100GB</div>
+                    <div>증분: 100GB</div>
+                </div>
+                <div class="timeline-day incremental-day">
+                    <div><strong>화요일</strong></div>
+                    <div>전체: 105GB</div>
+                    <div>증분: 5GB</div>
+                </div>
+                <div class="timeline-day incremental-day">
+                    <div><strong>수요일</strong></div>
+                    <div>전체: 110GB</div>
+                    <div>증분: 5GB</div>
+                </div>
+                <div class="timeline-day incremental-day">
+                    <div><strong>목요일</strong></div>
+                    <div>전체: 115GB</div>
+                    <div>증분: 5GB</div>
+                </div>
+                <div class="timeline-day incremental-day">
+                    <div><strong>금요일</strong></div>
+                    <div>전체: 120GB</div>
+                    <div>증분: 5GB</div>
+                </div>
+            </div>
+            
+            <p><strong>결과:</strong></p>
+            <ul>
+                <li><strong>전체 백업 총 용량:</strong> 550GB (100+105+110+115+120)</li>
+                <li><strong>증분 백업 총 용량:</strong> 120GB (100+5+5+5+5)</li>
+                <li><strong>절약 용량:</strong> 430GB (78% 절약)</li>
+            </ul>
+        </div>
+
+        <!-- 장단점 비교 -->
+        <div class="pros-cons">
+            <div class="pros">
+                <h3>🟢 전체 백업의 장점</h3>
+                <ul>
+                    <li>단순하고 이해하기 쉬움</li>
+                    <li>복구 시 한 번에 완료</li>
+                    <li>백업 파일 하나로 전체 복구</li>
+                    <li>관리가 간편함</li>
+                    <li>데이터 일관성 보장</li>
+                </ul>
+            </div>
+            <div class="cons">
+                <h3>🟡 전체 백업의 단점</h3>
+                <ul>
+                    <li>많은 저장 공간 필요</li>
+                    <li>백업 시간이 오래 걸림</li>
+                    <li>네트워크 대역폭 많이 사용</li>
+                    <li>비용이 많이 듦</li>
+                    <li>시스템 부하가 큼</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="pros-cons">
+            <div class="pros">
+                <h3>🟢 증분 백업의 장점</h3>
+                <ul>
+                    <li>저장 공간 효율적</li>
+                    <li>빠른 백업 속도</li>
+                    <li>네트워크 부하 적음</li>
+                    <li>비용 절약</li>
+                    <li>시스템 영향 최소화</li>
+                </ul>
+            </div>
+            <div class="cons">
+                <h3>🟡 증분 백업의 단점</h3>
+                <ul>
+                    <li>복구 시 여러 파일 필요</li>
+                    <li>관리가 복잡함</li>
+                    <li>백업 체인 손상 위험</li>
+                    <li>복구 시간이 오래 걸릴 수 있음</li>
+                    <li>의존성 관리 필요</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 저장 공간 비교 차트
+        const storageCtx = document.getElementById('storageChart').getContext('2d');
+        new Chart(storageCtx, {
+            type: 'bar',
+            data: {
+                labels: ['월', '화', '수', '목', '금', '토', '일'],
+                datasets: [{
+                    label: '전체 백업 (GB)',
+                    data: [100, 105, 110, 115, 120, 125, 130],
+                    backgroundColor: 'rgba(231, 76, 60, 0.8)',
+                    borderColor: 'rgba(231, 76, 60, 1)',
+                    borderWidth: 2
+                }, {
+                    label: '증분 백업 (GB)',
+                    data: [100, 5, 5, 5, 5, 5, 5],
+                    backgroundColor: 'rgba(39, 174, 96, 0.8)',
+                    borderColor: 'rgba(39, 174, 96, 1)',
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'top',
+                    }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: '백업 용량 (GB)'
+                        }
+                    }
+                }
+            }
+        });
+
+        // 백업 시간 비교 차트 (도넛 차트)
+        const timeCtx = document.getElementById('timeChart').getContext('2d');
+        new Chart(timeCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['전체 백업 시간', '증분 백업 시간'],
+                datasets: [{
+                    data: [120, 15], // 분 단위
+                    backgroundColor: [
+                        'rgba(231, 76, 60, 0.8)',
+                        'rgba(39, 174, 96, 0.8)'
+                    ],
+                    borderColor: [
+                        'rgba(231, 76, 60, 1)',
+                        'rgba(39, 174, 96, 1)'
+                    ],
+                    borderWidth: 2
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom',
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.label + ': ' + context.parsed + '분';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>
